@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .constants import WINDOW_TITLE, EXCEL_HEADER_ROW
-from .widgets import TestInfoBox, PlaceholderBox
+from .widgets import TestInfoBox, PlaceholderBox, AddErrorBox, QueueBox
 from .utils import truncate_path, open_in_default_app
 
 
@@ -186,15 +186,17 @@ class MainWindow(QMainWindow):
         self.test_info_box = TestInfoBox()
         layout.addWidget(self.test_info_box, stretch=2)
 
-        # Placeholder boxes
+        # Printer box (placeholder for now)
         self.printer_box = PlaceholderBox("Printer", "🖨️")
         layout.addWidget(self.printer_box, stretch=1)
 
-        self.error_box = PlaceholderBox("Add Error", "⚠️")
-        layout.addWidget(self.error_box, stretch=1)
+        # Add Error box
+        self.error_box = AddErrorBox()
+        layout.addWidget(self.error_box, stretch=2)
 
-        self.send_box = PlaceholderBox("Send", "📤")
-        layout.addWidget(self.send_box, stretch=1)
+        # Queue box
+        self.queue_box = QueueBox()
+        layout.addWidget(self.queue_box, stretch=2)
 
         return content
 
@@ -218,6 +220,13 @@ class MainWindow(QMainWindow):
         self.test_info_box.printer_changed.connect(self._on_printer_changed)
         self.test_info_box.line_changed.connect(self._on_line_changed)
         self.test_info_box.load_requested.connect(self._load_line_data)
+        
+        # Error box signals
+        self.error_box.error_added.connect(self._on_error_added)
+        
+        # Queue box signals
+        self.queue_box.save_requested.connect(self._save_to_excel)
+        self.queue_box.print_requested.connect(self._print_cover_sheets)
 
     # ========== FILE HANDLING ==========
 
@@ -293,6 +302,7 @@ class MainWindow(QMainWindow):
 
     def _on_line_changed(self, value: int):
         self._load_line_data()
+        self._update_error_context()
 
     def _load_line_data(self):
         if self.data_df is None:
@@ -326,6 +336,7 @@ class MainWindow(QMainWindow):
         if value:
             self.stored_kamp = value
             self.kamp_display.setText(f"✓ {value}")
+            self._update_error_context()
 
     def _set_operator(self):
         value = self.operator_input.text().strip()
@@ -335,9 +346,56 @@ class MainWindow(QMainWindow):
             # Update test info if loaded
             if self.data_df is not None:
                 self.test_info_box.set_field_value("Operator", value)
+            self._update_error_context()
 
     def _set_firmware(self):
         value = self.firmware_input.text().strip()
         if value:
             self.stored_firmware = value
             self.firmware_display.setText(f"✓ {value}")
+            self._update_error_context()
+
+    # ========== ERROR HANDLING ==========
+
+    def _update_error_context(self):
+        """Update the error box with current context."""
+        self.error_box.set_context(
+            kamp=self.stored_kamp,
+            operator=self.stored_operator,
+            firmware=self.stored_firmware,
+            line_number=self.test_info_box.current_line()
+        )
+
+    def _on_error_added(self, entry):
+        """Handle when an error is added from the error box."""
+        self.queue_box.add_entry(entry)
+
+    def _save_to_excel(self, queue):
+        """Save queued errors to Excel."""
+        if not queue:
+            print("No errors to save")
+            return
+        
+        if self.excel_file is None:
+            print("No Excel file loaded")
+            return
+        
+        # TODO: Implement Excel writing logic
+        print(f"Saving {len(queue)} error entries to Excel...")
+        for entry in queue:
+            print(f"  - {entry.error_type}: {entry.printer_summary} ({entry.count} pages)")
+
+    def _print_cover_sheets(self, queue):
+        """Print cover sheets for queued errors."""
+        if not queue:
+            print("No errors to print")
+            return
+        
+        if not self.cover_file_path:
+            print("No cover sheet template loaded")
+            return
+        
+        # TODO: Implement cover sheet generation
+        print(f"Printing {len(queue)} cover sheets...")
+        for entry in queue:
+            print(f"  - {entry.error_type}: {entry.printer_summary}")
