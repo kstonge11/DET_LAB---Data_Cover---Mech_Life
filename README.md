@@ -202,7 +202,7 @@ If switching printers feels slow, ensure you're using the latest version which u
 
 ## Version History
 
-- **v0.0.8** - Current version
+- **v1.0.1** - Current version
   - Settings dialog for KaMP#, Operator, Firmware, Phase#
   - Page count display from cell N6
   - Save covers to custom directory
@@ -214,4 +214,4 @@ Internal HP tool - Not for distribution.
 
 ## Author
 
-DET Lab Team
+DET Lab Team, Kelly St.Onge
