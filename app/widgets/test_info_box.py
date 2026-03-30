@@ -39,11 +39,20 @@ class TestInfoBox(QFrame):
         }
         QLabel#fieldLabel {
             color: #aaa;
-            font-size: 10px;
+            font-size: 20px;
         }
         QLabel#fieldValue {
             color: #4CAF50;
-            font-size: 11px;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        QLabel#pageCountLabel {
+            color: #aaa;
+            font-size: 20px;
+        }
+        QLabel#pageCountValue {
+            color: #FF9800;
+            font-size: 15px;
             font-weight: bold;
         }
         QComboBox {
@@ -57,6 +66,7 @@ class TestInfoBox(QFrame):
         self.setStyleSheet(self.STYLESHEET)
 
         self.field_values = {}  # Stores {display_name: {"label": QLabel, "columns": [...]}}
+        self._page_count_label = None  # Will store the page count value label
         self._setup_ui()
         self._connect_signals()
 
@@ -181,6 +191,17 @@ class TestInfoBox(QFrame):
                     "columns": column_names
                 }
 
+            # Add Page Count after Firmware (at the end of the grid)
+            page_count_row = len(fields)
+            page_count_label = QLabel("Page Count:")
+            page_count_label.setObjectName("pageCountLabel")
+            
+            self._page_count_label = QLabel("—")
+            self._page_count_label.setObjectName("pageCountValue")
+            
+            grid.addWidget(page_count_label, page_count_row, 0)
+            grid.addWidget(self._page_count_label, page_count_row, 1)
+
             fields_layout.addLayout(grid)
 
         fields_layout.addStretch()
@@ -224,3 +245,18 @@ class TestInfoBox(QFrame):
     def get_all_field_names(self) -> list:
         """Return all field display names."""
         return list(self.field_values.keys())
+    
+    def get_field_value(self, field_name: str) -> str:
+        """Get the current value of a specific field."""
+        if field_name in self.field_values:
+            return self.field_values[field_name]["label"].text()
+        return ""
+    
+    def get_all_values(self) -> dict:
+        """Return all field values as a dictionary."""
+        return {name: info["label"].text() for name, info in self.field_values.items()}
+    
+    def set_page_count(self, value: str):
+        """Set the page count display value."""
+        if self._page_count_label:
+            self._page_count_label.setText(value)

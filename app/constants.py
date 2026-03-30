@@ -19,7 +19,7 @@ PRINTERS = [
 ]
 
 # Short names for printer checkboxes
-PRINTER_SHORT_NAMES = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]
+PRINTER_SHORT_NAMES = ["X058", "X059", "X068", "X069", "X098", "X099", "X100", "X101"]
 
 # Excel data row where headers are located (0-indexed)
 EXCEL_HEADER_ROW = 8

@@ -10,7 +10,8 @@ from PyQt6.QtWidgets import (
 )
 
 from .constants import WINDOW_TITLE, EXCEL_HEADER_ROW
-from .widgets import TestInfoBox, PlaceholderBox, AddErrorBox, QueueBox
+from .widgets import TestInfoBox, PlaceholderBox, AddErrorBox, QueueBox, SettingsDialog
+from .services import CoverSheetService
 from .utils import truncate_path, open_in_default_app
 
 
@@ -30,6 +31,10 @@ class MainWindow(QMainWindow):
         self.stored_kamp = ""
         self.stored_operator = ""
         self.stored_firmware = ""
+        self.stored_phase = ""
+
+        # Page count from sheet metadata (cell N6)
+        self.page_count = ""
 
         self._setup_ui()
         self._connect_signals()
@@ -129,48 +134,81 @@ class MainWindow(QMainWindow):
         return section
 
     def _create_settings_section(self) -> QVBoxLayout:
-        """Create the Kamp/Operator/Firmware input section."""
+        """Create the compact settings display with edit button."""
         section = QVBoxLayout()
-        section.setSpacing(6)
+        section.setSpacing(4)
         section.setContentsMargins(0, 0, 10, 0)
 
-        # Helper to create each row
-        def make_row(label_text, placeholder):
+        # Settings display frame
+        settings_frame = QFrame()
+        settings_frame.setStyleSheet("""
+            QFrame {
+                background-color: #3a3a3a;
+                border: 1px solid #555;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QLabel#settingLabel {
+                color: #888;
+                font-size: 10px;
+            }
+            QLabel#settingValue {
+                color: #4CAF50;
+                font-size: 11px;
+                font-weight: bold;
+            }
+        """)
+
+        frame_layout = QVBoxLayout(settings_frame)
+        frame_layout.setContentsMargins(8, 6, 8, 6)
+        frame_layout.setSpacing(2)
+
+        # Create compact display rows
+        def make_setting_row(label_text):
             row = QHBoxLayout()
-            row.setSpacing(6)
+            row.setSpacing(4)
 
             label = QLabel(f"{label_text}:")
-            label.setFixedWidth(70)
+            label.setObjectName("settingLabel")
+            label.setFixedWidth(55)
 
-            input_field = QLineEdit()
-            input_field.setPlaceholderText(placeholder)
-            input_field.setFixedWidth(140)
-
-            btn = QPushButton("✏️ Set")
-            btn.setFixedSize(65, 26)
-
-            display = QLabel("")
-            display.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            display.setMinimumWidth(80)
+            value = QLabel("—")
+            value.setObjectName("settingValue")
+            value.setMinimumWidth(80)
 
             row.addWidget(label)
-            row.addWidget(input_field)
-            row.addWidget(btn)
-            row.addWidget(display)
+            row.addWidget(value)
+            row.addStretch()
 
-            return row, input_field, btn, display
+            return row, value
 
-        # Create rows
-        kamp_row, self.kamp_input, self.kamp_edit_btn, self.kamp_display = \
-            make_row("KaMP #", "Enter Kamp #")
-        operator_row, self.operator_input, self.operator_edit_btn, self.operator_display = \
-            make_row("Operator", "Enter Operator")
-        firmware_row, self.firmware_input, self.firmware_edit_btn, self.firmware_display = \
-            make_row("Firmware", "Enter Firmware")
+        kamp_row, self.kamp_display = make_setting_row("KaMP #")
+        operator_row, self.operator_display = make_setting_row("Operator")
+        firmware_row, self.firmware_display = make_setting_row("Firmware")
+        phase_row, self.phase_display = make_setting_row("Phase #")
 
-        section.addLayout(kamp_row)
-        section.addLayout(operator_row)
-        section.addLayout(firmware_row)
+        frame_layout.addLayout(kamp_row)
+        frame_layout.addLayout(operator_row)
+        frame_layout.addLayout(firmware_row)
+        frame_layout.addLayout(phase_row)
+
+        section.addWidget(settings_frame)
+
+        # Edit button
+        self.edit_settings_btn = QPushButton("✏️ Edit Settings")
+        self.edit_settings_btn.setFixedHeight(28)
+        self.edit_settings_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4a4a4a;
+                color: #fff;
+                border: 1px solid #666;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #555;
+            }
+        """)
+        section.addWidget(self.edit_settings_btn)
 
         return section
 
@@ -186,9 +224,9 @@ class MainWindow(QMainWindow):
         self.test_info_box = TestInfoBox()
         layout.addWidget(self.test_info_box, stretch=2)
 
-        # Printer box (placeholder for now)
+        '''# Printer box (placeholder for now)
         self.printer_box = PlaceholderBox("Printer", "🖨️")
-        layout.addWidget(self.printer_box, stretch=1)
+        layout.addWidget(self.printer_box, stretch=1)'''
 
         # Add Error box
         self.error_box = AddErrorBox()
@@ -208,24 +246,20 @@ class MainWindow(QMainWindow):
         self.browse_cover_btn.clicked.connect(self._browse_cover_file)
         self.open_cover_btn.clicked.connect(lambda: open_in_default_app(self.cover_file_path))
 
-        # Settings inputs
-        self.kamp_edit_btn.clicked.connect(self._set_kamp)
-        self.operator_edit_btn.clicked.connect(self._set_operator)
-        self.firmware_edit_btn.clicked.connect(self._set_firmware)
-        self.kamp_input.returnPressed.connect(self._set_kamp)
-        self.operator_input.returnPressed.connect(self._set_operator)
-        self.firmware_input.returnPressed.connect(self._set_firmware)
+        # Settings edit button
+        self.edit_settings_btn.clicked.connect(self._open_settings_dialog)
 
         # Test info box signals
         self.test_info_box.printer_changed.connect(self._on_printer_changed)
         self.test_info_box.line_changed.connect(self._on_line_changed)
         self.test_info_box.load_requested.connect(self._load_line_data)
-        
+
         # Error box signals
         self.error_box.error_added.connect(self._on_error_added)
-        
+
         # Queue box signals
-        self.queue_box.save_requested.connect(self._save_to_excel)
+        self.queue_box.choose_path_btn.clicked.connect(self._choose_save_path)
+        self.queue_box.save_covers_requested.connect(self._save_cover_sheets)
         self.queue_box.print_requested.connect(self._print_cover_sheets)
 
     # ========== FILE HANDLING ==========
@@ -288,10 +322,43 @@ class MainWindow(QMainWindow):
             self.test_info_box.set_max_lines(len(self.data_df))
             self.test_info_box.set_line(1)
             print(f"Loaded {len(self.data_df)} rows from '{selected_printer}'")
+
+            # Read page count from cell N6 using openpyxl
+            self._load_page_count(selected_printer)
+
             self._load_line_data()
         except Exception as e:
             print(f"Error loading sheet: {e}")
             self.data_df = None
+
+    def _load_page_count(self, sheet_name: str):
+        """Load page count from cell N6 of the specified sheet using pandas (fast)."""
+        try:
+            # Read just row 6 (0-indexed row 5), no header, single row
+            # Column N is index 13 (0-indexed)
+            df_row = pd.read_excel(
+                self.excel_file,
+                sheet_name=sheet_name,
+                header=None,
+                skiprows=5,  # Skip rows 1-5 (0-indexed 0-4)
+                nrows=1      # Read only 1 row (row 6)
+            )
+
+            # Column N = index 13
+            if len(df_row.columns) > 13:
+                page_count_value = df_row.iloc[0, 13]
+                if pd.notna(page_count_value):
+                    self.page_count = str(int(page_count_value) if isinstance(page_count_value, float) else page_count_value)
+                    self.test_info_box.set_page_count(self.page_count)
+                    print(f"Page count from N6: {self.page_count}")
+                    return
+
+            self.page_count = "—"
+            self.test_info_box.set_page_count("—")
+        except Exception as e:
+            print(f"Error reading page count: {e}")
+            self.page_count = "—"
+            self.test_info_box.set_page_count("—")
 
     # ========== DATA LOADING ==========
 
@@ -331,71 +398,130 @@ class MainWindow(QMainWindow):
 
     # ========== SETTINGS ==========
 
-    def _set_kamp(self):
-        value = self.kamp_input.text().strip()
-        if value:
-            self.stored_kamp = value
-            self.kamp_display.setText(f"✓ {value}")
-            self._update_error_context()
+    def _open_settings_dialog(self):
+        """Open the settings dialog to edit session values."""
+        dialog = SettingsDialog(
+            self,
+            kamp=self.stored_kamp,
+            operator=self.stored_operator,
+            firmware=self.stored_firmware,
+            phase=self.stored_phase
+        )
 
-    def _set_operator(self):
-        value = self.operator_input.text().strip()
-        if value:
-            self.stored_operator = value
-            self.operator_display.setText(f"✓ {value}")
-            # Update test info if loaded
-            if self.data_df is not None:
-                self.test_info_box.set_field_value("Operator", value)
-            self._update_error_context()
+        if dialog.exec():
+            values = dialog.get_values()
+            self._apply_settings(values)
 
-    def _set_firmware(self):
-        value = self.firmware_input.text().strip()
-        if value:
-            self.stored_firmware = value
-            self.firmware_display.setText(f"✓ {value}")
-            self._update_error_context()
+    def _apply_settings(self, values: dict):
+        """Apply settings from the dialog."""
+        # Update stored values
+        self.stored_kamp = values["kamp"]
+        self.stored_operator = values["operator"]
+        self.stored_firmware = values["firmware"]
+        self.stored_phase = values["phase"]
+
+        # Update display labels
+        self.kamp_display.setText(self.stored_kamp if self.stored_kamp else "—")
+        self.operator_display.setText(self.stored_operator if self.stored_operator else "—")
+        self.firmware_display.setText(self.stored_firmware if self.stored_firmware else "—")
+        self.phase_display.setText(self.stored_phase if self.stored_phase else "—")
+
+        # Update test info if loaded
+        if self.data_df is not None:
+            if self.stored_operator:
+                self.test_info_box.set_field_value("Operator", self.stored_operator)
+
+        # Update error context
+        self._update_error_context()
+
+        print(f"Settings updated: KaMP={self.stored_kamp}, Op={self.stored_operator}, FW={self.stored_firmware}, Phase={self.stored_phase}")
 
     # ========== ERROR HANDLING ==========
 
     def _update_error_context(self):
-        """Update the error box with current context."""
+        """Update the error box with current context including test info."""
+        # Get test info values from the test info box
+        test_values = self.test_info_box.get_all_values()
+
+        # Use stored_phase if set, otherwise fall back to test_values
+        phase_value = self.stored_phase if self.stored_phase else test_values.get("Phase", "")
+
         self.error_box.set_context(
             kamp=self.stored_kamp,
             operator=self.stored_operator,
             firmware=self.stored_firmware,
-            line_number=self.test_info_box.current_line()
+            line_number=self.test_info_box.current_line(),
+            # Test info fields - map display names to context keys
+            climate=test_values.get("Climate", ""),
+            media=test_values.get("Media #", ""),
+            script=test_values.get("Script #", ""),
+            plexity=test_values.get("Plexity", ""),
+            load=test_values.get("Load #", ""),
+            run=test_values.get("Run #", ""),
+            phase=phase_value,
         )
 
     def _on_error_added(self, entry):
         """Handle when an error is added from the error box."""
         self.queue_box.add_entry(entry)
 
-    def _save_to_excel(self, queue):
-        """Save queued errors to Excel."""
+    def _choose_save_path(self):
+        """Open dialog to choose save path for cover sheets."""
+        path = QFileDialog.getExistingDirectory(
+            self, 
+            "Choose Save Location for Cover Sheets",
+            "",
+            QFileDialog.Option.ShowDirsOnly
+        )
+        if path:
+            self.queue_box.set_save_path(path)
+            print(f"Save path set to: {path}")
+
+    def _save_cover_sheets(self, queue):
+        """Generate and save cover sheets to the chosen path."""
         if not queue:
             print("No errors to save")
             return
-        
-        if self.excel_file is None:
-            print("No Excel file loaded")
-            return
-        
-        # TODO: Implement Excel writing logic
-        print(f"Saving {len(queue)} error entries to Excel...")
-        for entry in queue:
-            print(f"  - {entry.error_type}: {entry.printer_summary} ({entry.count} pages)")
 
-    def _print_cover_sheets(self, queue):
-        """Print cover sheets for queued errors."""
-        if not queue:
-            print("No errors to print")
-            return
-        
         if not self.cover_file_path:
             print("No cover sheet template loaded")
             return
-        
-        # TODO: Implement cover sheet generation
-        print(f"Printing {len(queue)} cover sheets...")
+
+        save_path = self.queue_box.get_save_path()
+        if not save_path:
+            print("No save path selected")
+            return
+
+        # Create service and save files
+        service = CoverSheetService(self.cover_file_path)
+
+        total_saved = 0
+        saved_files = []
         for entry in queue:
-            print(f"  - {entry.error_type}: {entry.printer_summary}")
+            files = service.save_from_entry(entry, save_path)
+            saved_files.extend(files)
+            total_saved += len(files)
+
+        print(f"Saved {total_saved} cover sheets to: {save_path}")
+        for f in saved_files:
+            print(f"  - {f}")
+
+    def _print_cover_sheets(self, queue):
+        """Generate and print cover sheets for queued errors."""
+        if not queue:
+            print("No errors to print")
+            return
+
+        if not self.cover_file_path:
+            print("No cover sheet template loaded")
+            return
+
+        # Create service with the template (files auto-deleted after printing)
+        service = CoverSheetService(self.cover_file_path, keep_files=True)
+
+        total_printed = 0
+        for entry in queue:
+            printed = service.print_from_entry(entry)
+            total_printed += printed
+
+        print(f"Printed {total_printed} cover sheets")

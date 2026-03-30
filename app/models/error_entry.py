@@ -3,7 +3,7 @@ Data model for error entries in the queue.
 """
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Dict, Any
 
 
 @dataclass
@@ -20,6 +20,15 @@ class ErrorEntry:
     kamp: str = ""
     operator: str = ""
     firmware: str = ""
+    
+    # Test info fields captured at time of error
+    climate: str = ""
+    media: str = ""
+    script: str = ""
+    plexity: str = ""
+    load: str = ""
+    run: str = ""
+    phase: str = ""
     
     @property
     def count(self) -> int:
@@ -45,6 +54,18 @@ class ErrorEntry:
         else:
             return f"pg {', '.join(map(str, self.pages))}"
     
+    def get_test_info(self) -> Dict[str, str]:
+        """Return test info as a dictionary for cover sheet generation."""
+        return {
+            "climate": self.climate,
+            "media": self.media,
+            "script": self.script,
+            "plexity": self.plexity,
+            "load": self.load,
+            "run": self.run,
+            "phase": self.phase,
+        }
+    
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {
@@ -57,4 +78,11 @@ class ErrorEntry:
             "kamp": self.kamp,
             "operator": self.operator,
             "firmware": self.firmware,
+            "climate": self.climate,
+            "media": self.media,
+            "script": self.script,
+            "plexity": self.plexity,
+            "load": self.load,
+            "run": self.run,
+            "phase": self.phase,
         }

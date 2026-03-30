@@ -1,0 +1,5 @@
+PyQt6
+pandas
+qdarktheme
+openpyxl
+pywin32; sys_platform == 'win32'
