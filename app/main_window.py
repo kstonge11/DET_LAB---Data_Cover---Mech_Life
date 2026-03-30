@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
         self.stored_operator = ""
         self.stored_firmware = ""
         self.stored_phase = ""
-
+        
         # Page count from sheet metadata (cell N6)
         self.page_count = ""
 
@@ -158,7 +158,7 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }
         """)
-
+        
         frame_layout = QVBoxLayout(settings_frame)
         frame_layout.setContentsMargins(8, 6, 8, 6)
         frame_layout.setSpacing(2)
@@ -167,19 +167,19 @@ class MainWindow(QMainWindow):
         def make_setting_row(label_text):
             row = QHBoxLayout()
             row.setSpacing(4)
-
+            
             label = QLabel(f"{label_text}:")
             label.setObjectName("settingLabel")
             label.setFixedWidth(55)
-
+            
             value = QLabel("—")
             value.setObjectName("settingValue")
             value.setMinimumWidth(80)
-
+            
             row.addWidget(label)
             row.addWidget(value)
             row.addStretch()
-
+            
             return row, value
 
         kamp_row, self.kamp_display = make_setting_row("KaMP #")
@@ -295,11 +295,62 @@ class MainWindow(QMainWindow):
             else:
                 self.excel_file = pd.ExcelFile(file_path)
                 print(f"Available sheets: {self.excel_file.sheet_names}")
+
+                # Load error categories from the first printer sheet
+                self._load_error_categories()
+
                 self._load_printer_sheet()
         except Exception as e:
             print(f"Error loading file: {e}")
             self.data_df = None
             self.excel_file = None
+
+    def _load_error_categories(self):
+        if self.excel_file is None:
+            return
+        try:
+            first_sheet = self.test_info_box.current_printer()
+            if first_sheet not in self.excel_file.sheet_names:
+                first_sheet = self.excel_file.sheet_names[0]
+
+            # Read ONLY rows 8-9, starting at column AF
+            df_errors = pd.read_excel(
+                self.excel_file,
+                sheet_name=first_sheet,
+                header=None,
+                skiprows=7,   # Skip rows 1-7, start at row 8
+                nrows=2,      # Only read 2 rows: categories (row 8) + error names (row 9)
+                usecols=lambda x: x >= 31
+            )
+
+            if df_errors.empty or len(df_errors) < 2:
+                print("No error categories found")
+                return
+
+            categories = {}
+            for col_idx in range(len(df_errors.columns)):
+                category_name = df_errors.iloc[0, col_idx]  # Row 8 = category
+                error_name = df_errors.iloc[1, col_idx]     # Row 9 = error type
+
+                if pd.notna(category_name) and str(category_name).strip():
+                    category_name = str(category_name).strip()
+
+                    if pd.notna(error_name) and str(error_name).strip():
+                        error_name = str(error_name).strip()
+
+                        # Append error to category's list
+                        if category_name not in categories:
+                            categories[category_name] = []
+                        categories[category_name].append(error_name)
+
+            self.error_box.set_error_categories(categories)
+
+            for cat, errs in categories.items():
+                print(f"  {cat}: {errs}")
+
+        except Exception as e:
+            print(f"Error loading error categories: {e}")
+            self.error_box.set_error_categories({})
 
     def _load_printer_sheet(self):
         if self.excel_file is None:
@@ -468,7 +519,7 @@ class MainWindow(QMainWindow):
     def _choose_save_path(self):
         """Open dialog to choose save path for cover sheets."""
         path = QFileDialog.getExistingDirectory(
-            self, 
+            self,
             "Choose Save Location for Cover Sheets",
             "",
             QFileDialog.Option.ShowDirsOnly

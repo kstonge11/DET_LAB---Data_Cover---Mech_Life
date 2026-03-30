@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cover Sheet / Data Insert Tool V.1.0.1
+Cover Sheet / Data Insert Tool V.1.0.2
 
 Created By Kelly St.Onge March 24th 2026
 kelly.st-onge@hp.com
@@ -24,10 +24,10 @@ from app import MainWindow
 def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme()
-    
+
     window = MainWindow()
     window.show()
-    
+
     sys.exit(app.exec())
 
 

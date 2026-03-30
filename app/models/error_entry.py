@@ -9,18 +9,18 @@ from typing import List, Dict, Any
 @dataclass
 class ErrorEntry:
     """Represents a single error entry in the queue."""
-    
+
     error_type: str
     printers: List[str]
     pages: List[int]
     notes: str = ""
-    
+
     # Context from when the error was added
     line_number: int = 0
     kamp: str = ""
     operator: str = ""
     firmware: str = ""
-    
+
     # Test info fields captured at time of error
     climate: str = ""
     media: str = ""
@@ -29,12 +29,12 @@ class ErrorEntry:
     load: str = ""
     run: str = ""
     phase: str = ""
-    
+
     @property
     def count(self) -> int:
         """Number of pages affected (equals tally count)."""
         return len(self.pages)
-    
+
     @property
     def printer_summary(self) -> str:
         """Short summary of affected printers."""
@@ -45,7 +45,7 @@ class ErrorEntry:
         else:
             # Show last 3 chars of each printer name
             return ", ".join([p[-3:] for p in self.printers])
-    
+
     @property
     def page_summary(self) -> str:
         """Short summary of affected pages."""
@@ -53,7 +53,7 @@ class ErrorEntry:
             return f"pg {self.pages[0]}, {self.pages[1]}... ({len(self.pages)} total)"
         else:
             return f"pg {', '.join(map(str, self.pages))}"
-    
+
     def get_test_info(self) -> Dict[str, str]:
         """Return test info as a dictionary for cover sheet generation."""
         return {
@@ -65,7 +65,7 @@ class ErrorEntry:
             "run": self.run,
             "phase": self.phase,
         }
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {

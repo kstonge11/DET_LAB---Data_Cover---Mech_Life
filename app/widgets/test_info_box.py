@@ -48,11 +48,11 @@ class TestInfoBox(QFrame):
         }
         QLabel#pageCountLabel {
             color: #aaa;
-            font-size: 20px;
+            font-size: 12px;
         }
         QLabel#pageCountValue {
             color: #FF9800;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: bold;
         }
         QComboBox {

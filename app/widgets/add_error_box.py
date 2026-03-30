@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal
 
-from ..constants import ERROR_TYPES, PRINTERS, PRINTER_SHORT_NAMES
+from ..constants import PRINTERS, PRINTER_SHORT_NAMES
 from ..models import ErrorEntry
 
 
@@ -41,6 +41,12 @@ class AddErrorBox(QFrame):
             width: 14px;
             height: 14px;
         }
+        QComboBox#categoryCombo {
+            background-color: #3a3a3a;
+        }
+        QComboBox#errorCombo {
+            background-color: #3a3a3a;
+        }
     """
 
     def __init__(self, parent=None):
@@ -49,6 +55,7 @@ class AddErrorBox(QFrame):
         self.setStyleSheet(self.STYLESHEET)
 
         self._context = {}  # Stores kamp, operator, firmware, line_number
+        self._error_categories = {}  # {category_name: [error1, error2, ...]}
         self._setup_ui()
         self._connect_signals()
 
@@ -62,14 +69,30 @@ class AddErrorBox(QFrame):
         title.setObjectName("boxTitle")
         layout.addWidget(title)
 
+        # Category dropdown
+        category_row = QHBoxLayout()
+        category_label = QLabel("Category:")
+        category_label.setObjectName("sectionLabel")
+        category_label.setFixedWidth(55)
+
+        self.category_combo = QComboBox()
+        self.category_combo.setObjectName("categoryCombo")
+        self.category_combo.addItem("-- Select Category --")
+
+        category_row.addWidget(category_label)
+        category_row.addWidget(self.category_combo)
+        layout.addLayout(category_row)
+
         # Error Type dropdown
         error_row = QHBoxLayout()
         error_label = QLabel("Error:")
         error_label.setObjectName("sectionLabel")
-        error_label.setFixedWidth(45)
+        error_label.setFixedWidth(55)
 
         self.error_type_combo = QComboBox()
-        self.error_type_combo.addItems(ERROR_TYPES)
+        self.error_type_combo.setObjectName("errorCombo")
+        self.error_type_combo.addItem("-- Select Error --")
+        self.error_type_combo.setEnabled(False)
 
         error_row.addWidget(error_label)
         error_row.addWidget(self.error_type_combo)
@@ -120,7 +143,7 @@ class AddErrorBox(QFrame):
         pages_row = QHBoxLayout()
         pages_label = QLabel("Pages:")
         pages_label.setObjectName("sectionLabel")
-        pages_label.setFixedWidth(45)
+        pages_label.setFixedWidth(55)
 
         self.pages_input = QLineEdit()
         self.pages_input.setPlaceholderText("e.g. 11, 15, 22")
@@ -133,7 +156,7 @@ class AddErrorBox(QFrame):
         count_row = QHBoxLayout()
         count_label = QLabel("Count:")
         count_label.setObjectName("sectionLabel")
-        count_label.setFixedWidth(45)
+        count_label.setFixedWidth(55)
 
         self.count_display = QLabel("0")
         self.count_display.setStyleSheet("color: #4CAF50; font-weight: bold;")
@@ -147,7 +170,7 @@ class AddErrorBox(QFrame):
         notes_row = QHBoxLayout()
         notes_label = QLabel("Notes:")
         notes_label.setObjectName("sectionLabel")
-        notes_label.setFixedWidth(45)
+        notes_label.setFixedWidth(55)
 
         self.notes_input = QLineEdit()
         self.notes_input.setPlaceholderText("Optional details...")
@@ -180,6 +203,48 @@ class AddErrorBox(QFrame):
         self.invert_btn.clicked.connect(self._invert_selection)
         self.pages_input.textChanged.connect(self._update_count)
         self.add_btn.clicked.connect(self._add_to_queue)
+        self.category_combo.currentTextChanged.connect(self._on_category_changed)
+
+    def _on_category_changed(self, category: str):
+        """Update error dropdown when category changes."""
+        self.error_type_combo.clear()
+        
+        if category == "-- Select Category --" or category not in self._error_categories:
+            self.error_type_combo.addItem("-- Select Error --")
+            self.error_type_combo.setEnabled(False)
+            return
+        
+        errors = self._error_categories.get(category, [])
+        if errors:
+            self.error_type_combo.addItems(errors)
+            self.error_type_combo.setEnabled(True)
+        else:
+            self.error_type_combo.addItem("-- No Errors --")
+            self.error_type_combo.setEnabled(False)
+
+    def set_error_categories(self, categories: dict):
+        """
+        Set the error categories and their errors.
+        
+        Args:
+            categories: Dict of {category_name: [error1, error2, ...]}
+        """
+        self._error_categories = categories
+        
+        # Update category dropdown
+        self.category_combo.clear()
+        self.category_combo.addItem("-- Select Category --")
+        
+        for category_name in categories.keys():
+            if category_name:  # Skip empty category names
+                self.category_combo.addItem(category_name)
+        
+        # Reset error dropdown
+        self.error_type_combo.clear()
+        self.error_type_combo.addItem("-- Select Error --")
+        self.error_type_combo.setEnabled(False)
+        
+        print(f"Loaded {len(categories)} error categories")
 
     def _select_all(self):
         for cb in self.printer_checkboxes.values():
@@ -222,6 +287,7 @@ class AddErrorBox(QFrame):
     def _add_to_queue(self):
         printers = self._get_selected_printers()
         pages = self._parse_pages()
+        error_type = self.error_type_combo.currentText()
         
         if not printers:
             print("No printers selected")
@@ -229,9 +295,12 @@ class AddErrorBox(QFrame):
         if not pages:
             print("No pages entered")
             return
+        if error_type == "-- Select Error --" or error_type == "-- No Errors --":
+            print("No error type selected")
+            return
         
         entry = ErrorEntry(
-            error_type=self.error_type_combo.currentText(),
+            error_type=error_type,
             printers=printers,
             pages=pages,
             notes=self.notes_input.text().strip(),
@@ -250,7 +319,7 @@ class AddErrorBox(QFrame):
         
         self.error_added.emit(entry)
         
-        # Clear inputs
+        # Clear inputs but keep category/error selection
         self.pages_input.clear()
         self.notes_input.clear()
         self._select_none()

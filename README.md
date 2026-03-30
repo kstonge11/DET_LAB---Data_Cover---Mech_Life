@@ -28,13 +28,9 @@ The DET Lab Cover Sheet Tool allows test technicians to:
 All settings are edited via a single dialog and persist throughout the session.
 
 ### Error Logging
-- **Error Type Selection**: 60+ predefined error categories including:
-  - Pick Issues (skew, no pick, multipick, etc.)
-  - Print Quality (smears, banding, ink drops, etc.)
-  - Jams (duplex/simplex, input/output, damage variants)
-  - Stacking Errors
-  - Media Damage
-  - Unit Errors
+- **Category Selection**: First dropdown to select error category (loaded dynamically from Excel)
+- **Error Type Selection**: Second dropdown shows errors within the selected category
+- **Dynamic Updates**: Add new errors to the Excel sheet and they automatically appear in the app
 - **Printer Selection**: Select one or multiple affected printers
 - **Page Tally**: Click to record each affected page number
 - **Notes**: Optional notes field for additional context
@@ -154,6 +150,29 @@ Expected columns (after header row):
 | `Load_Phase` | Phase |
 | `Firmware` | Firmware |
 
+### Error Categories Format
+Error categories and types are read dynamically from the Excel sheet, starting at **cell AF8**:
+
+```
+     AF              AG              AH              ...
+8    Pick Issues     Print Quality   Jams - Duplex   ...
+9    Pick Skew       Smear           Input Jam       ...
+10   No Pick         Banding         Output Jam      ...
+11   Multipick       Ink Drops       ...             ...
+...
+```
+
+**Structure:**
+- **Row 8**: Category headers (e.g., "Pick Issues", "Print Quality")
+- **Rows 9+**: Error types belonging to each category
+- Empty cells mark the end of a category's error list
+
+**To add a new error:**
+1. Find the appropriate category column
+2. Add the error name in the next empty row below existing errors
+3. Save the Excel file
+4. Reload the data file in the app — new errors appear automatically
+
 ### Cover Sheet Template
 The cover sheet template should be an Excel file with the following cell mappings:
 
@@ -202,11 +221,16 @@ If switching printers feels slow, ensure you're using the latest version which u
 
 ## Version History
 
-- **v1.0.1** - Current version
+- **v1.0.2** - Current Version
+  - Dynamic Error categories
+
+- **v0.0.8** - Older version
   - Settings dialog for KaMP#, Operator, Firmware, Phase#
   - Page count display from cell N6
   - Save covers to custom directory
   - Optimized sheet loading performance
+
+
 
 ## License
 
@@ -214,4 +238,4 @@ Internal HP tool - Not for distribution.
 
 ## Author
 
-DET Lab Team, Kelly St.Onge
+DET Lab Team - Kelly St.Onge
