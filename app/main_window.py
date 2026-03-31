@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
         # File tracking
         self.data_file_path = None
         self.cover_file_path = None
-        self.excel_file = None
+        self.sheet_names = []  # Cache sheet names to avoid keeping file open
         self.data_df = None
 
         # Stored values
@@ -291,10 +291,12 @@ class MainWindow(QMainWindow):
         try:
             if file_path.endswith('.csv'):
                 self.data_df = pd.read_csv(file_path)
-                self.excel_file = None
+                self.sheet_names = []
             else:
-                self.excel_file = pd.ExcelFile(file_path)
-                print(f"Available sheets: {self.excel_file.sheet_names}")
+                # Read sheet names and close file immediately to avoid locking
+                with pd.ExcelFile(file_path) as xls:
+                    self.sheet_names = xls.sheet_names
+                print(f"Available sheets: {self.sheet_names}")
 
                 # Load error categories from the first printer sheet
                 self._load_error_categories()
@@ -303,19 +305,20 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Error loading file: {e}")
             self.data_df = None
-            self.excel_file = None
+            self.sheet_names = []
 
     def _load_error_categories(self):
-        if self.excel_file is None:
+        if not self.data_file_path or not self.sheet_names:
             return
         try:
             first_sheet = self.test_info_box.current_printer()
-            if first_sheet not in self.excel_file.sheet_names:
-                first_sheet = self.excel_file.sheet_names[0]
+            if first_sheet not in self.sheet_names:
+                first_sheet = self.sheet_names[0]
 
             # Read ONLY rows 8-9, starting at column AF
+            # Open and close file immediately to avoid locking
             df_errors = pd.read_excel(
-                self.excel_file,
+                self.data_file_path,
                 sheet_name=first_sheet,
                 header=None,
                 skiprows=7,   # Skip rows 1-7, start at row 8
@@ -353,20 +356,21 @@ class MainWindow(QMainWindow):
             self.error_box.set_error_categories({})
 
     def _load_printer_sheet(self):
-        if self.excel_file is None:
+        if not self.data_file_path or not self.sheet_names:
             return
 
         selected_printer = self.test_info_box.current_printer()
 
-        if selected_printer not in self.excel_file.sheet_names:
+        if selected_printer not in self.sheet_names:
             print(f"Sheet '{selected_printer}' not found")
             self.data_df = None
             self.test_info_box.clear_all_fields()
             return
 
         try:
+            # Open and close file immediately to avoid locking
             self.data_df = pd.read_excel(
-                self.excel_file,
+                self.data_file_path,
                 sheet_name=selected_printer,
                 header=EXCEL_HEADER_ROW
             )
@@ -387,8 +391,9 @@ class MainWindow(QMainWindow):
         try:
             # Read just row 6 (0-indexed row 5), no header, single row
             # Column N is index 13 (0-indexed)
+            # Open and close file immediately to avoid locking
             df_row = pd.read_excel(
-                self.excel_file,
+                self.data_file_path,
                 sheet_name=sheet_name,
                 header=None,
                 skiprows=5,  # Skip rows 1-5 (0-indexed 0-4)
@@ -415,7 +420,7 @@ class MainWindow(QMainWindow):
 
     def _on_printer_changed(self, printer_name: str):
         print(f"Printer changed to: {printer_name}")
-        if self.excel_file is not None:
+        if self.data_file_path and self.sheet_names:
             self._load_printer_sheet()
 
     def _on_line_changed(self, value: int):

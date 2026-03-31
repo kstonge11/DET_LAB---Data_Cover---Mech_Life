@@ -3,7 +3,7 @@ Constants and configuration for DET Cover/Entry Tool
 """
 
 APP_NAME = "DET Cover/Entry Tool"
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.4"
 WINDOW_TITLE = f"{APP_NAME} V.{APP_VERSION}"
 
 # Default printer list

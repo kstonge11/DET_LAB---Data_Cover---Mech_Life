@@ -221,7 +221,14 @@ If switching printers feels slow, ensure you're using the latest version which u
 
 ## Version History
 
-- **v1.0.2** - Current Version
+- **v1.0.4** - Current Version
+  - Fixed file locking issue preventing Excel from saving while app is open
+  - Fixed Excel printing to not close other open workbooks
+
+- **v1.0.3** - Previous Version
+  - Dynamic Error categories
+
+- **v1.0.2** - Previous Version
   - Dynamic Error categories
 
 - **v0.0.8** - Older version
