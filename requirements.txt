@@ -1,5 +1,6 @@
 PyQt6
 pandas
-qdarktheme
+pyqtdarktheme
 openpyxl
 pywin32; sys_platform == 'win32'
+pyinstaller>=6.0

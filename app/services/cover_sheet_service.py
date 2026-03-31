@@ -196,14 +196,23 @@ class CoverSheetService:
         """Print using Excel COM automation on Windows."""
         try:
             import win32com.client
-            excel = win32com.client.Dispatch("Excel.Application")
-            excel.Visible = False
+
+            # Try to connect to existing Excel instance, or create new one
+            try:
+                excel = win32com.client.GetActiveObject("Excel.Application")
+                excel_was_running = True
+            except:
+                excel = win32com.client.Dispatch("Excel.Application")
+                excel_was_running = False
 
             abs_path = os.path.abspath(file_path)
             wb = excel.Workbooks.Open(abs_path)
             wb.PrintOut()
             wb.Close(SaveChanges=False)
-            excel.Quit()
+
+            # Only quit Excel if we started it
+            if not excel_was_running:
+                excel.Quit()
 
             print(f"Printed via Excel COM: {file_path}")
             return True

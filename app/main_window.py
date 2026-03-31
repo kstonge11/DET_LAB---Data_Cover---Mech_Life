@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
         self.stored_operator = ""
         self.stored_firmware = ""
         self.stored_phase = ""
-        
+
         # Page count from sheet metadata (cell N6)
         self.page_count = ""
 
