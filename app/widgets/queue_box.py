@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from ..models import ErrorEntry
+from ..utils.logger import logger
 
 
 class QueueBox(QFrame):
@@ -196,14 +197,15 @@ class QueueBox(QFrame):
         """Add an error entry to the queue."""
         self._queue.append(entry)
         self._refresh_display()
-        print(f"Queued: {entry.error_type} on {entry.printer_summary}")
+        logger.info(f"Queued: {entry.error_type} on {entry.printer_summary}")
 
     def clear(self):
         """Clear all entries from the queue."""
+        count = len(self._queue)
         self._queue.clear()
         self._refresh_display()
         self.queue_cleared.emit()
-        print("Queue cleared")
+        logger.info(f"Queue cleared ({count} items removed)")
 
     def get_queue(self) -> List[ErrorEntry]:
         """Return a copy of the current queue."""

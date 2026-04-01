@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 from .constants import WINDOW_TITLE, EXCEL_HEADER_ROW
 from .widgets import TestInfoBox, PlaceholderBox, AddErrorBox, QueueBox, SettingsDialog
 from .services import CoverSheetService
-from .utils import truncate_path, open_in_default_app
+from .utils import truncate_path, open_in_default_app, logger, log_exception, Config
 
 
 class MainWindow(QMainWindow):
@@ -20,24 +20,38 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.resize(1200, 700)
+        
+        logger.info("Initializing DET Lab Cover Sheet Tool")
+
+        # Configuration persistence
+        self.config = Config()
+        saved_settings = self.config.load()
 
         # File tracking
         self.data_file_path = None
         self.cover_file_path = None
         self.sheet_names = []  # Cache sheet names to avoid keeping file open
         self.data_df = None
+        
+        # Sheet cache for optimization (avoids re-reading sheets)
+        self._sheet_cache: dict = {}
 
-        # Stored values
-        self.stored_kamp = ""
-        self.stored_operator = ""
-        self.stored_firmware = ""
-        self.stored_phase = ""
+        # Stored values (load from config)
+        self.stored_kamp = saved_settings.get("kamp", "")
+        self.stored_operator = saved_settings.get("operator", "")
+        self.stored_firmware = saved_settings.get("firmware", "")
+        self.stored_phase = saved_settings.get("phase", "")
 
         # Page count from sheet metadata (cell N6)
         self.page_count = ""
 
         self._setup_ui()
         self._connect_signals()
+        
+        # Apply loaded settings to UI
+        self._apply_loaded_settings()
+        
+        logger.info("DET Lab Tool initialized successfully")
 
     def _setup_ui(self):
         central_widget = QWidget()
@@ -289,6 +303,7 @@ class MainWindow(QMainWindow):
 
     def _load_data_file(self, file_path: str):
         try:
+            logger.info(f"Loading data file: {file_path}")
             if file_path.endswith('.csv'):
                 self.data_df = pd.read_csv(file_path)
                 self.sheet_names = []
@@ -296,14 +311,20 @@ class MainWindow(QMainWindow):
                 # Read sheet names and close file immediately to avoid locking
                 with pd.ExcelFile(file_path) as xls:
                     self.sheet_names = xls.sheet_names
-                print(f"Available sheets: {self.sheet_names}")
+                logger.debug(f"Available sheets: {self.sheet_names}")
+
+                # Clear sheet cache when loading new file
+                self._sheet_cache.clear()
 
                 # Load error categories from the first printer sheet
                 self._load_error_categories()
 
                 self._load_printer_sheet()
+                
+            # Save last used path to config
+            self.config.set("last_data_path", file_path)
         except Exception as e:
-            print(f"Error loading file: {e}")
+            log_exception(e, f"Error loading file: {file_path}")
             self.data_df = None
             self.sheet_names = []
 
@@ -327,7 +348,7 @@ class MainWindow(QMainWindow):
             )
 
             if df_errors.empty or len(df_errors) < 2:
-                print("No error categories found")
+                logger.warning("No error categories found in data file")
                 return
 
             categories = {}
@@ -348,11 +369,12 @@ class MainWindow(QMainWindow):
 
             self.error_box.set_error_categories(categories)
 
+            logger.debug(f"Loaded {len(categories)} error categories")
             for cat, errs in categories.items():
-                print(f"  {cat}: {errs}")
+                logger.debug(f"  {cat}: {errs}")
 
         except Exception as e:
-            print(f"Error loading error categories: {e}")
+            log_exception(e, "Error loading error categories")
             self.error_box.set_error_categories({})
 
     def _load_printer_sheet(self):
@@ -362,28 +384,36 @@ class MainWindow(QMainWindow):
         selected_printer = self.test_info_box.current_printer()
 
         if selected_printer not in self.sheet_names:
-            print(f"Sheet '{selected_printer}' not found")
+            logger.warning(f"Sheet '{selected_printer}' not found in workbook")
             self.data_df = None
             self.test_info_box.clear_all_fields()
             return
 
         try:
-            # Open and close file immediately to avoid locking
-            self.data_df = pd.read_excel(
-                self.data_file_path,
-                sheet_name=selected_printer,
-                header=EXCEL_HEADER_ROW
-            )
+            # Check cache first for optimization
+            if selected_printer in self._sheet_cache:
+                self.data_df = self._sheet_cache[selected_printer]
+                logger.debug(f"Loaded '{selected_printer}' from cache")
+            else:
+                # Open and close file immediately to avoid locking
+                self.data_df = pd.read_excel(
+                    self.data_file_path,
+                    sheet_name=selected_printer,
+                    header=EXCEL_HEADER_ROW
+                )
+                # Cache the sheet for future use
+                self._sheet_cache[selected_printer] = self.data_df
+                logger.info(f"Loaded {len(self.data_df)} rows from '{selected_printer}'")
+            
             self.test_info_box.set_max_lines(len(self.data_df))
             self.test_info_box.set_line(1)
-            print(f"Loaded {len(self.data_df)} rows from '{selected_printer}'")
 
-            # Read page count from cell N6 using openpyxl
+            # Read page count from cell N6 using pandas
             self._load_page_count(selected_printer)
 
             self._load_line_data()
         except Exception as e:
-            print(f"Error loading sheet: {e}")
+            log_exception(e, f"Error loading sheet '{selected_printer}'")
             self.data_df = None
 
     def _load_page_count(self, sheet_name: str):
@@ -406,20 +436,20 @@ class MainWindow(QMainWindow):
                 if pd.notna(page_count_value):
                     self.page_count = str(int(page_count_value) if isinstance(page_count_value, float) else page_count_value)
                     self.test_info_box.set_page_count(self.page_count)
-                    print(f"Page count from N6: {self.page_count}")
+                    logger.debug(f"Page count from N6: {self.page_count}")
                     return
 
             self.page_count = "—"
             self.test_info_box.set_page_count("—")
         except Exception as e:
-            print(f"Error reading page count: {e}")
+            log_exception(e, f"Error reading page count from '{sheet_name}'")
             self.page_count = "—"
             self.test_info_box.set_page_count("—")
 
     # ========== DATA LOADING ==========
 
     def _on_printer_changed(self, printer_name: str):
-        print(f"Printer changed to: {printer_name}")
+        logger.info(f"Printer changed to: {printer_name}")
         if self.data_file_path and self.sheet_names:
             self._load_printer_sheet()
 
@@ -489,8 +519,16 @@ class MainWindow(QMainWindow):
 
         # Update error context
         self._update_error_context()
+        
+        # Save settings to config file for persistence
+        self.config.save({
+            "kamp": self.stored_kamp,
+            "operator": self.stored_operator,
+            "firmware": self.stored_firmware,
+            "phase": self.stored_phase,
+        })
 
-        print(f"Settings updated: KaMP={self.stored_kamp}, Op={self.stored_operator}, FW={self.stored_firmware}, Phase={self.stored_phase}")
+        logger.info(f"Settings updated: KaMP={self.stored_kamp}, Op={self.stored_operator}, FW={self.stored_firmware}, Phase={self.stored_phase}")
 
     # ========== ERROR HANDLING ==========
 
@@ -531,23 +569,26 @@ class MainWindow(QMainWindow):
         )
         if path:
             self.queue_box.set_save_path(path)
-            print(f"Save path set to: {path}")
+            self.config.set("last_save_dir", path)
+            logger.info(f"Save path set to: {path}")
 
     def _save_cover_sheets(self, queue):
         """Generate and save cover sheets to the chosen path."""
         if not queue:
-            print("No errors to save")
+            logger.warning("No errors to save - queue is empty")
             return
 
         if not self.cover_file_path:
-            print("No cover sheet template loaded")
+            logger.warning("No cover sheet template loaded")
             return
 
         save_path = self.queue_box.get_save_path()
         if not save_path:
-            print("No save path selected")
+            logger.warning("No save path selected")
             return
 
+        logger.info(f"Saving {len(queue)} cover sheets to: {save_path}")
+        
         # Create service and save files
         service = CoverSheetService(self.cover_file_path)
 
@@ -558,20 +599,22 @@ class MainWindow(QMainWindow):
             saved_files.extend(files)
             total_saved += len(files)
 
-        print(f"Saved {total_saved} cover sheets to: {save_path}")
+        logger.info(f"Saved {total_saved} cover sheets to: {save_path}")
         for f in saved_files:
-            print(f"  - {f}")
+            logger.debug(f"  Saved: {f}")
 
     def _print_cover_sheets(self, queue):
         """Generate and print cover sheets for queued errors."""
         if not queue:
-            print("No errors to print")
+            logger.warning("No errors to print - queue is empty")
             return
 
         if not self.cover_file_path:
-            print("No cover sheet template loaded")
+            logger.warning("No cover sheet template loaded")
             return
 
+        logger.info(f"Printing {len(queue)} queued items...")
+        
         # Create service with the template (files auto-deleted after printing)
         service = CoverSheetService(self.cover_file_path, keep_files=True)
 
@@ -580,4 +623,21 @@ class MainWindow(QMainWindow):
             printed = service.print_from_entry(entry)
             total_printed += printed
 
-        print(f"Printed {total_printed} cover sheets")
+        logger.info(f"Printed {total_printed} cover sheets")
+        
+        # Clear the queue after successful print
+        if total_printed > 0:
+            self.queue_box.clear()
+            logger.info("Queue cleared after printing")
+    
+    # ========== HELPER METHODS ==========
+    
+    def _apply_loaded_settings(self):
+        """Apply settings loaded from config to the UI."""
+        self.kamp_display.setText(self.stored_kamp if self.stored_kamp else "—")
+        self.operator_display.setText(self.stored_operator if self.stored_operator else "—")
+        self.firmware_display.setText(self.stored_firmware if self.stored_firmware else "—")
+        self.phase_display.setText(self.stored_phase if self.stored_phase else "—")
+        
+        if any([self.stored_kamp, self.stored_operator, self.stored_firmware, self.stored_phase]):
+            logger.info(f"Restored settings: KaMP={self.stored_kamp}, Op={self.stored_operator}")

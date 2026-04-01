@@ -6,6 +6,8 @@ import os
 import platform
 import subprocess
 
+from .logger import logger, log_exception
+
 
 def truncate_path(path: str, max_length: int = 50) -> str:
     """Truncate path for display, keeping filename visible."""
@@ -26,16 +28,19 @@ def open_in_default_app(file_path: str) -> bool:
     Returns True on success, False on failure.
     """
     if not file_path or not os.path.exists(file_path):
+        logger.warning(f"Cannot open file - path invalid or missing: {file_path}")
         return False
 
     try:
+        logger.debug(f"Opening file in default app: {file_path}")
         if platform.system() == "Windows":
             os.startfile(file_path)
         elif platform.system() == "Darwin":  # macOS
             subprocess.run(["open", file_path], check=True)
         else:  # Linux
             subprocess.run(["xdg-open", file_path], check=True)
+        logger.info(f"Opened file: {os.path.basename(file_path)}")
         return True
     except Exception as e:
-        print(f"Error opening file: {e}")
+        log_exception(e, f"Error opening file: {file_path}")
         return False

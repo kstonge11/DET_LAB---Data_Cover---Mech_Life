@@ -11,7 +11,7 @@ Purpose:
     To help automate the flow of DET test labs cover sheet and data entry.
 
 Dependencies:
-    PyQt6, pandas, pyqtdarktheme
+    PyQt6, pandas, pyqtdarktheme , requirements.txt
 """
 
 import sys

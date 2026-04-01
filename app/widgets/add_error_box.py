@@ -10,6 +10,7 @@ from PyQt6.QtCore import pyqtSignal
 
 from ..constants import PRINTERS, PRINTER_SHORT_NAMES
 from ..models import ErrorEntry
+from ..utils.logger import logger
 
 
 class AddErrorBox(QFrame):
@@ -244,7 +245,7 @@ class AddErrorBox(QFrame):
         self.error_type_combo.addItem("-- Select Error --")
         self.error_type_combo.setEnabled(False)
         
-        print(f"Loaded {len(categories)} error categories")
+        logger.debug(f"Loaded {len(categories)} error categories")
 
     def _select_all(self):
         for cb in self.printer_checkboxes.values():
@@ -290,13 +291,13 @@ class AddErrorBox(QFrame):
         error_type = self.error_type_combo.currentText()
         
         if not printers:
-            print("No printers selected")
+            logger.warning("Cannot add to queue: No printers selected")
             return
         if not pages:
-            print("No pages entered")
+            logger.warning("Cannot add to queue: No pages entered")
             return
         if error_type == "-- Select Error --" or error_type == "-- No Errors --":
-            print("No error type selected")
+            logger.warning("Cannot add to queue: No error type selected")
             return
         
         entry = ErrorEntry(

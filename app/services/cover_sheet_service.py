@@ -12,6 +12,8 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+from ..utils.logger import logger, log_exception
+
 
 class CoverSheetService:
     """Handles cover sheet generation and printing."""
@@ -123,6 +125,8 @@ class CoverSheetService:
     def _print_via_excel_mac(self, file_path: str) -> bool:
         """Print using Microsoft Excel on macOS via AppleScript."""
         abs_path = os.path.abspath(file_path)
+        logger.debug(f"Attempting Excel print on macOS: {abs_path}")
+        
         # Use System Events to simulate Cmd+P for more reliable printing
         script = f'''
         tell application "Microsoft Excel"
@@ -153,21 +157,23 @@ class CoverSheetService:
                 timeout=30
             )
             if result.returncode == 0:
-                print(f"Printed via Excel: {file_path}")
+                logger.info(f"Printed via Excel: {os.path.basename(file_path)}")
                 return True
             else:
-                print(f"Excel print failed: {result.stderr}")
+                logger.warning(f"Excel print failed: {result.stderr}")
                 return False
         except subprocess.TimeoutExpired:
-            print("Excel print timed out")
+            logger.error("Excel print timed out after 30 seconds")
             return False
         except Exception as e:
-            print(f"Excel print error: {e}")
+            log_exception(e, "Excel print error")
             return False
 
     def _print_via_numbers_mac(self, file_path: str) -> bool:
         """Print using Numbers on macOS via AppleScript (fallback)."""
         abs_path = os.path.abspath(file_path)
+        logger.debug(f"Attempting Numbers print on macOS: {abs_path}")
+        
         script = f'''
         tell application "Numbers"
             open "{abs_path}"
@@ -183,17 +189,19 @@ class CoverSheetService:
                 timeout=30
             )
             if result.returncode == 0:
-                print(f"Printed via Numbers: {file_path}")
+                logger.info(f"Printed via Numbers: {os.path.basename(file_path)}")
                 return True
             else:
-                print(f"Numbers print failed: {result.stderr}")
+                logger.warning(f"Numbers print failed: {result.stderr}")
                 return False
         except Exception as e:
-            print(f"Numbers print error: {e}")
+            log_exception(e, "Numbers print error")
             return False
 
     def _print_via_win32(self, file_path: str) -> bool:
         """Print using Excel COM automation on Windows."""
+        logger.debug(f"Attempting Excel COM print on Windows: {file_path}")
+        
         try:
             import win32com.client
 
@@ -201,9 +209,11 @@ class CoverSheetService:
             try:
                 excel = win32com.client.GetActiveObject("Excel.Application")
                 excel_was_running = True
+                logger.debug("Connected to existing Excel instance")
             except:
                 excel = win32com.client.Dispatch("Excel.Application")
                 excel_was_running = False
+                logger.debug("Started new Excel instance")
 
             abs_path = os.path.abspath(file_path)
             wb = excel.Workbooks.Open(abs_path)
@@ -213,14 +223,15 @@ class CoverSheetService:
             # Only quit Excel if we started it
             if not excel_was_running:
                 excel.Quit()
+                logger.debug("Closed Excel instance")
 
-            print(f"Printed via Excel COM: {file_path}")
+            logger.info(f"Printed via Excel COM: {os.path.basename(file_path)}")
             return True
         except ImportError:
-            print("win32com not installed. Install with: pip install pywin32")
+            logger.error("win32com not installed. Install with: pip install pywin32")
             return False
         except Exception as e:
-            print(f"Excel COM print error: {e}")
+            log_exception(e, "Excel COM print error")
             return False
 
     def print_file(self, file_path: str, delete_after: bool = False) -> bool:
@@ -235,32 +246,34 @@ class CoverSheetService:
             True if print command was sent successfully
         """
         if not os.path.exists(file_path):
-            print(f"File not found: {file_path}")
+            logger.error(f"File not found: {file_path}")
             return False
 
         success = False
         system = platform.system()
+        logger.debug(f"Printing on {system}: {file_path}")
 
         if system == "Darwin":  # macOS
             # Try Excel first, fall back to Numbers
             success = self._print_via_excel_mac(file_path)
             if not success:
-                print("Trying Numbers as fallback...")
+                logger.info("Trying Numbers as fallback...")
                 success = self._print_via_numbers_mac(file_path)
 
         elif system == "Windows":
             success = self._print_via_win32(file_path)
 
         else:  # Linux - try lpr with libreoffice conversion
-            print(f"Linux printing not fully supported. File saved at: {file_path}")
+            logger.warning(f"Linux printing not fully supported. File saved at: {file_path}")
             success = False
 
         # Clean up temp file if requested
         if delete_after and success and not self.keep_files:
             try:
                 os.remove(file_path)
-            except:
-                pass
+                logger.debug(f"Deleted temp file: {file_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete temp file: {e}")
 
         return success
 
