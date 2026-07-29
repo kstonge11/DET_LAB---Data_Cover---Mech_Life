@@ -8,21 +8,21 @@ WINDOW_TITLE = f"{APP_NAME} V.{APP_VERSION}"
 
 # Default printer list
 PRINTERS = [
-    "TH5BA5X058",
-    "TH5BA5X059",
-    "TH5BA5X068",
-    "TH5BA5X069",
-    "TH5BA5X098",
-    "TH5BA5X099",
-    "TH5BA5X100",
-    "TH5BA5X101",
+    "TH63Q1X147",
+    "TH63Q1X148",
+    "TH63Q1X149",
+    "TH63Q1X150",
+    "TH63Q1X179",
+    "TH63Q1X180",
+    "TH63Q1X181",
+    "TH63Q1X182",
 ]
 
 # Short names for printer checkboxes
-PRINTER_SHORT_NAMES = ["X058", "X059", "X068", "X069", "X098", "X099", "X100", "X101"]
+PRINTER_SHORT_NAMES = ["X147", "X148", "X149", "X150", "X179", "X180", "X181", "X182"]
 
 # Excel data row where headers are located (0-indexed)
-EXCEL_HEADER_ROW = 8
+EXCEL_HEADER_ROW = 9
 
 # Field definitions for Test Info box
 # Format: (display_name, [possible_column_names])
