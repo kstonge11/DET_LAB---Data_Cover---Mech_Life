@@ -22,7 +22,7 @@ PRINTERS = [
 PRINTER_SHORT_NAMES = ["X147", "X148", "X149", "X150", "X179", "X180", "X181", "X182"]
 
 # Excel data row where headers are located (0-indexed)
-EXCEL_HEADER_ROW = 9
+EXCEL_HEADER_ROW = 8
 
 # Field definitions for Test Info box
 # Format: (display_name, [possible_column_names])
